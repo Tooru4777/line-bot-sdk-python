@@ -6,3 +6,7 @@ pydantic >=2.0.3, <3
 aenum >= 3.1.11
 python_dateutil >= 2.5.3
 Deprecated
+flask
+line-bot-sdk
+google-generativeai
+gunicorn
