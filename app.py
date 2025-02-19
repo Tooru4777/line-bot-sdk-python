@@ -1,48 +1,49 @@
-import os
-import flask
-import google.generativeai as genai
+import logging
+from flask import Flask, request
 from linebot import LineBotApi, WebhookHandler
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
 from linebot.exceptions import InvalidSignatureError
-from flask import request, abort
+from linebot.models import MessageEvent, TextMessage, TextSendMessage
+import os
 
-# Load environment variables
-LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
-LINE_SECRET = os.getenv("LINE_SECRET")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+app = Flask(__name__)
 
-# Initialize LINE bot
-line_bot_api = LineBotApi(LINE_ACCESS_TOKEN)
-handler = WebhookHandler(LINE_SECRET)
+# LINE API credentials
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 
-# Initialize Gemini AI
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-pro")
+line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
+handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-app = flask.Flask(__name__)
+# Enable logging
+logging.basicConfig(level=logging.INFO)
 
-@app.route("/callback", methods=["POST"])
-def callback():
-    """LINE webhook callback function"""
-    signature = request.headers["X-Line-Signature"]
+@app.route("/", methods=["GET"])
+def home():
+    return "LINE Bot is running!", 200
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    signature = request.headers.get("X-Line-Signature")
     body = request.get_data(as_text=True)
+    
+    # Log the webhook request
+    app.logger.info(f"Received webhook: {body}")
 
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
-        abort(400)
+        app.logger.error("Invalid signature error")
+        return "Invalid signature", 400
 
-    return "OK"
+    return "OK", 200
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    """Handle incoming messages"""
-    user_message = event.message.text
-    response = model.generate_content(user_message)
-    
-    reply_text = response.text if response.text else "Sorry, I couldn't generate a response."
-    
+    """Handles text messages from LINE"""
+    reply_text = f"You said: {event.message.text}"
+    app.logger.info(f"Replying with: {reply_text}")
     line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
